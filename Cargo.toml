@@ -22,5 +22,8 @@ url = "2"
 http = "1"
 
 [patch.crates-io]
-web-transport-quinn = { git = "https://github.com/ai-and-i/web-transport.git", branch = "main" }
-web-transport-proto = { git = "https://github.com/ai-and-i/web-transport.git", branch = "main" }
+web-transport-quinn = { path = "vendor/web-transport/web-transport-quinn" }
+web-transport-proto = { path = "vendor/web-transport/web-transport-proto" }
+quinn = { path = "vendor/quinn/quinn" }
+quinn-proto = { path = "vendor/quinn/quinn-proto" }
+quinn-udp = { path = "vendor/quinn/quinn-udp" }

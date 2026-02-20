@@ -1,0 +1,7 @@
+[submodule "vendor/web-transport"]
+	path = vendor/web-transport
+	url = https://github.com/ai-and-i/web-transport.git
+	branch = web-transport-py
+[submodule "vendor/quinn"]
+	path = vendor/quinn
+	url = https://github.com/quinn-rs/quinn.git

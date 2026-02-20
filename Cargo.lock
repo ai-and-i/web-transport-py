@@ -590,8 +590,6 @@ dependencies = [
 [[package]]
 name = "quinn"
 version = "0.11.9"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b9e20a958963c291dc322d98411f541009df2ced7b5a4f2bd52337638cfccf20"
 dependencies = [
  "bytes",
  "cfg_aliases",
@@ -610,8 +608,6 @@ dependencies = [
 [[package]]
 name = "quinn-proto"
 version = "0.11.13"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f1906b49b0c3bc04b5fe5d86a77925ae6524a19b816ae38ce1e426255f1d8a31"
 dependencies = [
  "bytes",
  "fastbloom",
@@ -633,15 +629,13 @@ dependencies = [
 [[package]]
 name = "quinn-udp"
 version = "0.5.14"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "addec6a0dcad8a8d96a771f815f0eaf55f9d1805756410b39f5fa81332574cbd"
 dependencies = [
  "cfg_aliases",
  "libc",
  "once_cell",
  "socket2",
  "tracing",
- "windows-sys 0.60.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -1212,7 +1206,6 @@ dependencies = [
 [[package]]
 name = "web-transport-proto"
 version = "0.5.3"
-source = "git+https://github.com/ai-and-i/web-transport.git?branch=main#98ec6e8958e8cf634b298e1367feb71cf03321ab"
 dependencies = [
  "bytes",
  "http",
@@ -1243,7 +1236,6 @@ dependencies = [
 [[package]]
 name = "web-transport-quinn"
 version = "0.11.5"
-source = "git+https://github.com/ai-and-i/web-transport.git?branch=main#98ec6e8958e8cf634b298e1367feb71cf03321ab"
 dependencies = [
  "bytes",
  "futures",
@@ -1262,7 +1254,6 @@ dependencies = [
 [[package]]
 name = "web-transport-trait"
 version = "0.3.3"
-source = "git+https://github.com/ai-and-i/web-transport.git?branch=main#98ec6e8958e8cf634b298e1367feb71cf03321ab"
 dependencies = [
  "bytes",
 ]
