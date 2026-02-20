@@ -1211,8 +1211,8 @@ dependencies = [
 
 [[package]]
 name = "web-transport-proto"
-version = "0.5.2"
-source = "git+https://github.com/ai-and-i/web-transport.git?branch=fix%2Fconnect-read-overconsumes#b088616e93bac2b38cd61c9e729c04fc2d1705b1"
+version = "0.5.3"
+source = "git+https://github.com/ai-and-i/web-transport.git?branch=main#98ec6e8958e8cf634b298e1367feb71cf03321ab"
 dependencies = [
  "bytes",
  "http",
@@ -1242,8 +1242,8 @@ dependencies = [
 
 [[package]]
 name = "web-transport-quinn"
-version = "0.11.4"
-source = "git+https://github.com/ai-and-i/web-transport.git?branch=fix%2Fconnect-read-overconsumes#b088616e93bac2b38cd61c9e729c04fc2d1705b1"
+version = "0.11.5"
+source = "git+https://github.com/ai-and-i/web-transport.git?branch=main#98ec6e8958e8cf634b298e1367feb71cf03321ab"
 dependencies = [
  "bytes",
  "futures",
@@ -1262,7 +1262,7 @@ dependencies = [
 [[package]]
 name = "web-transport-trait"
 version = "0.3.3"
-source = "git+https://github.com/ai-and-i/web-transport.git?branch=fix%2Fconnect-read-overconsumes#b088616e93bac2b38cd61c9e729c04fc2d1705b1"
+source = "git+https://github.com/ai-and-i/web-transport.git?branch=main#98ec6e8958e8cf634b298e1367feb71cf03321ab"
 dependencies = [
  "bytes",
 ]
