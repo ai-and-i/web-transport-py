@@ -87,10 +87,10 @@ async def test_server_finish_signals_eof_to_browser(
 @pytest.mark.xfail(
     reason="WebTransport error code mapping (RFC 9297 §4.3) may not roundtrip browser abort codes correctly"
 )
-async def test_browser_abort_with_error_code(
+async def test_browser_abort_with_code(
     start_server: ServerFactory, run_js: RunJS
 ) -> None:
-    """Browser writer.abort(42) → server recv sees StreamClosedByPeer(kind='reset', error_code=42)."""
+    """Browser writer.abort(42) → server recv sees StreamClosedByPeer(kind='reset', code=42)."""
     async with start_server() as (server, port, hash_b64):
         error: BaseException | None = None
 
@@ -122,7 +122,7 @@ async def test_browser_abort_with_error_code(
 
     assert isinstance(error, web_transport.StreamClosedByPeer)
     assert error.kind == "reset"
-    assert error.error_code == 42
+    assert error.code == 42
 
 
 async def test_server_reset_causes_browser_read_error(
@@ -167,10 +167,10 @@ async def test_server_reset_causes_browser_read_error(
 @pytest.mark.xfail(
     reason="WebTransport error code mapping (RFC 9297 §4.3) may not roundtrip browser cancel codes correctly"
 )
-async def test_browser_cancel_recv_with_error_code(
+async def test_browser_cancel_recv_with_code(
     start_server: ServerFactory, run_js: RunJS
 ) -> None:
-    """Browser reader.cancel(42) → server send.write() raises StreamClosedByPeer(kind='stop', error_code=42)."""
+    """Browser reader.cancel(42) → server send.write() raises StreamClosedByPeer(kind='stop', code=42)."""
     async with start_server() as (server, port, hash_b64):
         error: BaseException | None = None
 
@@ -210,7 +210,7 @@ async def test_browser_cancel_recv_with_error_code(
 
     assert isinstance(error, web_transport.StreamClosedByPeer)
     assert error.kind == "stop"
-    assert error.error_code == 42
+    assert error.code == 42
 
 
 async def test_server_stop_causes_browser_write_error(

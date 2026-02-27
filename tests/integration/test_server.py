@@ -251,9 +251,10 @@ async def test_server_close_with_code(self_signed_cert, cert_hash):
         async def server_task():
             request = await server.accept()
             assert request is not None
-            await request.accept()
+            session = await request.accept()
             await asyncio.sleep(0.1)
-            server.close(42, "shutting down")
+            session.close(42, "shutting down")
+            await session.wait_closed()
 
         async def client_task():
             async with web_transport.Client(

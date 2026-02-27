@@ -45,9 +45,10 @@ fn set_attrs(err: &PyErr, f: impl FnOnce(&Bound<'_, pyo3::types::PyAny>)) {
 pub fn new_session_closed_by_peer(source: &str, code: Option<u64>, reason: &str) -> PyErr {
     let code_str = code.map(|c| format!(" (code {c})")).unwrap_or_default();
     let msg = match source {
+        "session" => format!("peer closed session{code_str}: {reason}"),
         "application" => format!("peer application closed session{code_str}: {reason}"),
         "transport" => format!("transport closed{code_str}: {reason}"),
-        "reset" => "peer sent stateless reset".to_string(),
+        "connection-reset" => "peer sent stateless reset".to_string(),
         _ => format!("session closed by peer{code_str}: {reason}"),
     };
     let err = SessionClosedByPeer::new_err(msg);
@@ -61,13 +62,13 @@ pub fn new_session_closed_by_peer(source: &str, code: Option<u64>, reason: &str)
     err
 }
 
-pub fn new_stream_closed_by_peer(kind: &str, error_code: u32) -> PyErr {
-    let msg = format!("stream {kind} by peer with code {error_code}");
+pub fn new_stream_closed_by_peer(kind: &str, code: u32) -> PyErr {
+    let msg = format!("stream {kind} by peer with code {code}");
     let err = StreamClosedByPeer::new_err(msg);
     let kind = kind.to_string();
     set_attrs(&err, |val| {
         let _ = val.setattr("kind", &*kind);
-        let _ = val.setattr("error_code", error_code);
+        let _ = val.setattr("code", code);
     });
     err
 }
@@ -116,7 +117,7 @@ pub fn map_connection_error(err: quinn::ConnectionError) -> PyErr {
             let reason = String::from_utf8_lossy(&close.reason).to_string();
             new_session_closed_by_peer("transport", Some(code), &reason)
         }
-        quinn::ConnectionError::Reset => new_session_closed_by_peer("reset", None, ""),
+        quinn::ConnectionError::Reset => new_session_closed_by_peer("connection-reset", None, ""),
         quinn::ConnectionError::TransportError(ref te) => ProtocolError::new_err(te.to_string()),
         quinn::ConnectionError::VersionMismatch => ProtocolError::new_err("QUIC version mismatch"),
         quinn::ConnectionError::CidsExhausted => ProtocolError::new_err("connection IDs exhausted"),
@@ -129,8 +130,8 @@ pub fn map_session_error(err: web_transport_quinn::SessionError) -> PyErr {
         web_transport_quinn::SessionError::ConnectionError(ce) => map_connection_error(ce),
         web_transport_quinn::SessionError::WebTransportError(ref wte) => match wte {
             web_transport_quinn::WebTransportError::Closed(code, reason) => {
-                // This is only raised when the session is closed by peer application
-                new_session_closed_by_peer("application", Some(*code as u64), reason)
+                // WebTransport CLOSE_WEBTRANSPORT_SESSION capsule from the peer
+                new_session_closed_by_peer("session", Some(*code as u64), reason)
             }
             _ => ProtocolError::new_err(wte.to_string()),
         },

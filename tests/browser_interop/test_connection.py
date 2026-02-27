@@ -86,7 +86,7 @@ async def test_browser_close_with_code_and_reason(
             """)
 
     assert isinstance(close_reason, web_transport.SessionClosedByPeer)
-    assert close_reason.source == "application"
+    assert close_reason.source == "session"
     assert close_reason.code == 7
     assert close_reason.reason == "done"
 
@@ -122,7 +122,7 @@ async def test_browser_close_default_code(
             """)
 
     assert isinstance(close_reason, web_transport.SessionClosedByPeer)
-    assert close_reason.source == "application"
+    assert close_reason.source == "session"
     assert close_reason.code == 0
     assert close_reason.reason == ""
 

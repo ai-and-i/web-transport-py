@@ -15,7 +15,7 @@ async def test_session_close_with_code_and_reason(session_pair):
     async def accept_side():
         with pytest.raises(web_transport.SessionClosedByPeer) as exc_info:
             await server_session.accept_bi()
-        assert exc_info.value.source == "application"
+        assert exc_info.value.source == "session"
         assert exc_info.value.code == 42
         assert exc_info.value.reason == "goodbye"
 
@@ -172,6 +172,7 @@ async def test_open_stream_after_close(session_pair):
     _server_session, client_session = session_pair
 
     client_session.close()
+    await client_session.wait_closed()
 
     with pytest.raises(web_transport.SessionClosedLocally):
         await client_session.open_bi()
@@ -198,6 +199,7 @@ async def test_send_datagram_after_close(session_pair):
     _server_session, client_session = session_pair
 
     client_session.close()
+    await client_session.wait_closed()
 
     with pytest.raises(web_transport.SessionClosed):
         client_session.send_datagram(b"x")

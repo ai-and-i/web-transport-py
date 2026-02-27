@@ -55,7 +55,7 @@ def certificate_hash(certificate_der: bytes) -> bytes:
 # │   └── ProtocolError                 QUIC / HTTP/3 protocol violation
 # ├── StreamError                       Stream-level failures
 # │   ├── StreamClosed                  Stream closed (either side)
-# │   │   ├── StreamClosedByPeer        Peer stopped/reset (.kind, .error_code)
+# │   │   ├── StreamClosedByPeer        Peer stopped/reset (.kind, .code)
 # │   │   └── StreamClosedLocally       Stream already finished/reset locally
 # │   ├── StreamTooLongError            read(-1) data exceeded size limit
 # │   └── StreamIncompleteReadError     EOF before expected bytes (.expected, .partial)
@@ -95,18 +95,24 @@ class SessionClosedByPeer(SessionClosed):
 
     Attributes:
         source: How the session was closed:
-            - ``"application"`` — the peer's application closed the session;
-              *code* and *reason* are meaningful.
+            - ``"session"`` — the peer sent a WebTransport
+              ``CLOSE_WEBTRANSPORT_SESSION`` capsule; *code* and *reason*
+              are meaningful.
+            - ``"application"`` — the peer's QUIC stack sent
+              ``CONNECTION_CLOSE`` with an application error code (HTTP/3
+              layer); *code* may be meaningful, *reason* may be present.
             - ``"transport"`` — the peer's QUIC stack closed the connection
               (e.g. protocol violation detected by the peer).
-            - ``"reset"`` — the peer sent a stateless reset, typically
-              because it lost all connection state (e.g. after a restart).
-        code: Application error code (when ``source == "application"``),
-            or ``None`` for transport-level closes and stateless resets.
+            - ``"connection-reset"`` — the peer sent a stateless reset,
+              typically because it lost all connection state (e.g. after a
+              restart).
+        code: Error code (when ``source`` is ``"session"`` or
+            ``"application"``), or ``None`` for transport-level closes and
+            connection resets.
         reason: Human-readable close reason, or ``""`` if not provided.
     """
 
-    source: Literal["application", "transport", "reset"]
+    source: Literal["session", "application", "transport", "connection-reset"]
     code: int | None
     reason: str
 
@@ -159,11 +165,11 @@ class StreamClosedByPeer(StreamClosed):
               abandoning transmission of data on the stream.
             - ``"stop"`` — the peer sent STOP_SENDING (send side),
               requesting that we stop writing to the stream.
-        error_code: The application error code from the peer.
+        code: The application error code from the peer.
     """
 
     kind: Literal["reset", "stop"]
-    error_code: int
+    code: int
 
 class StreamClosedLocally(StreamClosed):
     """The stream was already finished or reset locally."""

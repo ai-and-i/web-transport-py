@@ -8,7 +8,7 @@ import web_transport
 
 
 @pytest.mark.asyncio
-async def test_send_reset_with_error_code(session_pair):
+async def test_send_reset_with_code(session_pair):
     """send.reset(42) -> peer read() raises StreamClosedByPeer(reset, 42)."""
     server_session, client_session = session_pair
 
@@ -19,7 +19,7 @@ async def test_send_reset_with_error_code(session_pair):
         with pytest.raises(web_transport.StreamClosedByPeer) as exc_info:
             await recv_s.read()
         assert exc_info.value.kind == "reset"
-        assert exc_info.value.error_code == 42
+        assert exc_info.value.code == 42
 
     task = asyncio.create_task(server_side())
     await asyncio.sleep(0.05)
@@ -29,7 +29,7 @@ async def test_send_reset_with_error_code(session_pair):
 
 @pytest.mark.asyncio
 async def test_send_reset_default_code(session_pair):
-    """send.reset() -> error_code=0."""
+    """send.reset() -> code=0."""
     server_session, client_session = session_pair
 
     send, _recv = await client_session.open_bi()
@@ -39,7 +39,7 @@ async def test_send_reset_default_code(session_pair):
         with pytest.raises(web_transport.StreamClosedByPeer) as exc_info:
             await recv_s.read()
         assert exc_info.value.kind == "reset"
-        assert exc_info.value.error_code == 0
+        assert exc_info.value.code == 0
 
     task = asyncio.create_task(server_side())
     await asyncio.sleep(0.05)
@@ -81,7 +81,7 @@ async def test_write_after_finish_raises(session_pair):
 
 
 @pytest.mark.asyncio
-async def test_recv_stop_with_error_code(session_pair):
+async def test_recv_stop_with_code(session_pair):
     """recv.stop(42) -> peer write() raises StreamClosedByPeer(stop, 42)."""
     server_session, client_session = session_pair
 
@@ -95,7 +95,7 @@ async def test_recv_stop_with_error_code(session_pair):
             for _ in range(100):
                 await send_s.write(b"x" * 1024)
         assert exc_info.value.kind == "stop"
-        assert exc_info.value.error_code == 42
+        assert exc_info.value.code == 42
 
     task = asyncio.create_task(server_side())
     recv.stop(42)
@@ -104,7 +104,7 @@ async def test_recv_stop_with_error_code(session_pair):
 
 @pytest.mark.asyncio
 async def test_recv_stop_default_code(session_pair):
-    """recv.stop() -> error_code=0."""
+    """recv.stop() -> code=0."""
     server_session, client_session = session_pair
 
     send, recv = await client_session.open_bi()
@@ -116,7 +116,7 @@ async def test_recv_stop_default_code(session_pair):
             for _ in range(100):
                 await send_s.write(b"x" * 1024)
         assert exc_info.value.kind == "stop"
-        assert exc_info.value.error_code == 0
+        assert exc_info.value.code == 0
 
     task = asyncio.create_task(server_side())
     recv.stop()
@@ -379,7 +379,7 @@ async def test_peer_reset_during_read(session_pair):
         await recv.read()
 
     assert exc_info.value.kind == "reset"
-    assert exc_info.value.error_code == 7
+    assert exc_info.value.code == 7
     await task
 
 
@@ -395,7 +395,7 @@ async def test_uni_send_reset(session_pair):
         with pytest.raises(web_transport.StreamClosedByPeer) as exc_info:
             await recv.read()
         assert exc_info.value.kind == "reset"
-        assert exc_info.value.error_code == 0
+        assert exc_info.value.code == 0
 
     task = asyncio.create_task(server_side())
     await asyncio.sleep(0.05)
@@ -422,7 +422,7 @@ async def test_uni_recv_stop(session_pair):
             await send.write(b"x" * 1024)
 
     assert exc_info.value.kind == "stop"
-    assert exc_info.value.error_code == 42
+    assert exc_info.value.code == 42
     await task
 
 
@@ -444,7 +444,7 @@ async def test_readexactly_during_peer_reset(session_pair):
         await recv.readexactly(1000)
 
     assert exc_info.value.kind == "reset"
-    assert exc_info.value.error_code == 7
+    assert exc_info.value.code == 7
     await task
 
 
