@@ -1,6 +1,6 @@
 # web-transport
 
-[![PyPI](https://img.shields.io/pypi/v/web-transport)](https://pypi.org/project/web-transport/)
+[![PyPI](https://img.shields.io/pypi/v/web-transport-py)](https://pypi.org/project/web-transport-py/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 Python bindings for [web-transport-quinn](https://docs.rs/web-transport-quinn/) — a pure-Rust WebTransport library built on QUIC.
@@ -17,7 +17,7 @@ Python bindings for [web-transport-quinn](https://docs.rs/web-transport-quinn/) 
 ## Installation
 
 ```bash
-pip install web-transport
+pip install web-transport-py
 ```
 
 Requires Python 3.12+. Prebuilt wheels are available for Linux, macOS, and Windows.
