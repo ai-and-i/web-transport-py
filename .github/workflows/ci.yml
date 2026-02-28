@@ -76,5 +76,14 @@ jobs:
       - name: Build native module
         run: uv run maturin develop
 
+      - name: Install Playwright browsers (Linux only)
+        if: runner.os == 'Linux'
+        run: uv run playwright install chromium --with-deps
+
       - name: Python tests
+        if: runner.os == 'Linux'
         run: uv run pytest
+
+      - name: Python tests (skip browser interop)
+        if: runner.os != 'Linux'
+        run: uv run pytest tests/unit tests/integration
