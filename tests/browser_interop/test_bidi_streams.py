@@ -36,7 +36,8 @@ async def test_bidi_echo_text(start_server: ServerFactory, run_js: RunJS) -> Non
                 """
                 const stream = await transport.createBidirectionalStream();
                 await writeAllString(stream.writable, "hello from chromium");
-                return await readAllString(stream.readable);
+                const echo = await readAllString(stream.readable);
+                return echo;
             """,
             )
 
@@ -93,7 +94,6 @@ async def test_bidi_echo_large_payload(
                 async with send:
                     data = await recv.read()
                     await send.write(data)
-                # Wait for browser to finish reading before closing session
                 await session.wait_closed()
 
         size = 1024 * 1024  # 1 MB
@@ -111,12 +111,13 @@ async def test_bidi_echo_large_payload(
                 if (echoed.length !== {size})
                     throw new Error("Size mismatch: " + echoed.length);
                 // Spot-check instead of transferring full array
-                return {{
+                const result = {{
                     length: echoed.length,
                     first: echoed[0],
                     mid: echoed[{size // 2}],
                     last: echoed[{size - 1}],
                 }};
+                return result;
             """,
             )
 
@@ -141,6 +142,7 @@ async def test_bidi_empty_stream(start_server: ServerFactory, run_js: RunJS) -> 
                 send, recv = await session.accept_bi()
                 async with send:
                     received = await recv.read()
+                await session.wait_closed()
 
         async with asyncio.TaskGroup() as tg:
             tg.create_task(server_side())
@@ -150,7 +152,9 @@ async def test_bidi_empty_stream(start_server: ServerFactory, run_js: RunJS) -> 
                 """
                 const stream = await transport.createBidirectionalStream();
                 const writer = stream.writable.getWriter();
-                await writer.close();
+                try { await writer.close(); } catch (e) {
+                    throw new Error("Failed to close writable: " + e.message);
+                }
                 return true;
             """,
             )
@@ -176,6 +180,7 @@ async def test_bidi_server_opens_stream(
                     await send.write(b"from server")
                     await send.finish()
                     server_received = await recv.read()
+                await session.wait_closed()
 
         async with asyncio.TaskGroup() as tg:
             tg.create_task(server_side())
@@ -308,7 +313,8 @@ async def test_bidi_browser_writes_multiple_chunks(
                 await writer.write(new TextEncoder().encode("bbb"));
                 await writer.write(new TextEncoder().encode("ccc"));
                 await writer.close();
-                return await readAllString(stream.readable);
+                const echo = await readAllString(stream.readable);
+                return echo;
             """,
             )
 
@@ -344,7 +350,8 @@ async def test_bidi_server_writes_multiple_chunks(
                 // Close writable so server can proceed
                 const writer = stream.writable.getWriter();
                 await writer.close();
-                return await readAllString(stream.readable);
+                const data = await readAllString(stream.readable);
+                return data;
             """,
             )
 
@@ -376,7 +383,8 @@ async def test_bidi_half_close_then_read(
                 """
                 const stream = await transport.createBidirectionalStream();
                 await writeAllString(stream.writable, "request");
-                return await readAllString(stream.readable);
+                const echo = await readAllString(stream.readable);
+                return echo;
             """,
             )
 
@@ -426,7 +434,7 @@ async def test_bidi_interleaved_request_response(
                 ({ value } = await reader.read());
                 const resp2 = new TextDecoder().decode(value);
 
-                await writer.close();
+                writer.releaseLock();
                 reader.releaseLock();
                 return [resp1, resp2];
             """,

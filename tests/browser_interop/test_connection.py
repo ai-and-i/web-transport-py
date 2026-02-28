@@ -54,9 +54,6 @@ async def test_browser_connects_and_ready_resolves(
     assert result is True
 
 
-@pytest.mark.xfail(
-    reason="Browser transport.close() triggers a QUIC-level close that the server reports as SessionClosedLocally instead of SessionClosedByPeer"
-)
 async def test_browser_close_with_code_and_reason(
     start_server: ServerFactory, run_js_raw: RunJSRaw
 ) -> None:
@@ -80,8 +77,7 @@ async def test_browser_close_with_code_and_reason(
                 const transport = new WebTransport(url, transportOptions);
                 await transport.ready;
                 transport.close({{closeCode: 7, reason: "done"}});
-                // Wait for close frame to be sent
-                await new Promise(r => setTimeout(r, 500));
+                await transport.closed;
                 return true;
             """)
 
@@ -91,9 +87,6 @@ async def test_browser_close_with_code_and_reason(
     assert close_reason.reason == "done"
 
 
-@pytest.mark.xfail(
-    reason="Browser transport.close() triggers a QUIC-level close that the server reports as SessionClosedLocally instead of SessionClosedByPeer"
-)
 async def test_browser_close_default_code(
     start_server: ServerFactory, run_js_raw: RunJSRaw
 ) -> None:
@@ -117,7 +110,7 @@ async def test_browser_close_default_code(
                 const transport = new WebTransport(url, transportOptions);
                 await transport.ready;
                 transport.close();
-                await new Promise(r => setTimeout(r, 500));
+                await transport.closed;
                 return true;
             """)
 
@@ -127,9 +120,6 @@ async def test_browser_close_default_code(
     assert close_reason.reason == ""
 
 
-@pytest.mark.xfail(
-    reason="session.close() sends QUIC CONNECTION_CLOSE; browser sees 'Connection lost' instead of clean WebTransport close info"
-)
 async def test_server_close_with_code_and_reason(
     start_server: ServerFactory, run_js_raw: RunJSRaw
 ) -> None:
@@ -141,7 +131,6 @@ async def test_server_close_with_code_and_reason(
             assert request is not None
             session = await request.accept()
             async with session:
-                await asyncio.sleep(0.1)
                 session.close(42, "bye")
 
         setup = _webtransport_connect_js(port, hash_b64)
@@ -163,9 +152,6 @@ async def test_server_close_with_code_and_reason(
     assert result["reason"] == "bye"
 
 
-@pytest.mark.xfail(
-    reason="session.close() sends QUIC CONNECTION_CLOSE; browser sees 'Connection lost' instead of clean WebTransport close info"
-)
 async def test_server_close_default_code(
     start_server: ServerFactory, run_js_raw: RunJSRaw
 ) -> None:
@@ -177,7 +163,6 @@ async def test_server_close_default_code(
             assert request is not None
             session = await request.accept()
             async with session:
-                await asyncio.sleep(0.1)
                 session.close()
 
         setup = _webtransport_connect_js(port, hash_b64)
@@ -211,11 +196,11 @@ async def test_session_request_url(start_server: ServerFactory, run_js: RunJS) -
             request_url = request.url
             session = await request.accept()
             async with session:
-                await session.wait_closed()
+                pass
 
         async with asyncio.TaskGroup() as tg:
             tg.create_task(server_side())
-            await run_js(port, hash_b64, "return true;")
+            await run_js(port, hash_b64, "await transport.closed; return true;")
 
     assert f"127.0.0.1:{port}" in request_url
 
@@ -311,11 +296,10 @@ async def test_session_remote_address(
             session = await request.accept()
             async with session:
                 remote = session.remote_address
-                await session.wait_closed()
 
         async with asyncio.TaskGroup() as tg:
             tg.create_task(server_side())
-            await run_js(port, hash_b64, "return true;")
+            await run_js(port, hash_b64, "await transport.closed; return true;")
 
     assert remote[0] == "127.0.0.1"
     assert remote[1] > 0
@@ -333,11 +317,10 @@ async def test_session_rtt_positive(start_server: ServerFactory, run_js: RunJS) 
             session = await request.accept()
             async with session:
                 rtt = session.rtt
-                await session.wait_closed()
 
         async with asyncio.TaskGroup() as tg:
             tg.create_task(server_side())
-            await run_js(port, hash_b64, "return true;")
+            await run_js(port, hash_b64, "await transport.closed; return true;")
 
     assert rtt > 0
 
@@ -356,11 +339,10 @@ async def test_session_max_datagram_size_positive(
             session = await request.accept()
             async with session:
                 max_size = session.max_datagram_size
-                await session.wait_closed()
 
         async with asyncio.TaskGroup() as tg:
             tg.create_task(server_side())
-            await run_js(port, hash_b64, "return true;")
+            await run_js(port, hash_b64, "await transport.closed; return true;")
 
     assert max_size > 0
 
@@ -379,11 +361,10 @@ async def test_session_close_reason_none_while_open(
             session = await request.accept()
             async with session:
                 reason_while_open = session.close_reason
-                await session.wait_closed()
 
         async with asyncio.TaskGroup() as tg:
             tg.create_task(server_side())
-            await run_js(port, hash_b64, "return true;")
+            await run_js(port, hash_b64, "await transport.closed; return true;")
 
     assert reason_while_open is None
 
@@ -435,8 +416,11 @@ async def test_session_close_is_idempotent(
 
         async with asyncio.TaskGroup() as tg:
             tg.create_task(server_side())
-            # The run_js harness will catch the connection closing
-            try:
-                await run_js(port, hash_b64, "return true;")
-            except Exception:
-                pass  # Browser may see the close before returning
+            await run_js(
+                port,
+                hash_b64,
+                """
+                await transport.closed;
+                return true;
+            """,
+            )

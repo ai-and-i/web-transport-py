@@ -30,11 +30,11 @@ async def test_request_url_matches_target(
             request_url = request.url
             session = await request.accept()
             async with session:
-                await session.wait_closed()
+                pass
 
         async with asyncio.TaskGroup() as tg:
             tg.create_task(server_side())
-            await run_js(port, hash_b64, "return true;")
+            await run_js(port, hash_b64, "await transport.closed; return true;")
 
     assert "127.0.0.1" in request_url
     assert str(port) in request_url

@@ -44,6 +44,7 @@ async def test_concurrent_bidi_and_uni_streams(
                 async with asyncio.TaskGroup() as inner_tg:
                     inner_tg.create_task(handle_bidi_streams())
                     inner_tg.create_task(handle_uni_streams())
+                await session.wait_closed()
 
         async with asyncio.TaskGroup() as tg:
             tg.create_task(server_side())
@@ -100,6 +101,7 @@ async def test_streams_and_datagrams_simultaneously(
                 async with asyncio.TaskGroup() as inner_tg:
                     inner_tg.create_task(echo_stream())
                     inner_tg.create_task(echo_datagram())
+                await session.wait_closed()
 
         async with asyncio.TaskGroup() as tg:
             tg.create_task(server_side())
@@ -148,6 +150,7 @@ async def test_many_streams(start_server: ServerFactory, run_js: RunJS) -> None:
                     async with send:
                         data = await recv.read()
                         await send.write(data)
+                await session.wait_closed()
 
         async with asyncio.TaskGroup() as tg:
             tg.create_task(server_side())
@@ -191,7 +194,6 @@ async def test_large_concurrent_transfers(
                     async with send:
                         data = await recv.read()
                         await send.write(data)
-                # Wait for browser to finish reading before closing session
                 await session.wait_closed()
 
         async with asyncio.TaskGroup() as tg:
@@ -239,6 +241,7 @@ async def test_rapid_open_close_streams(
                         web_transport.SessionClosed,
                     ):
                         pass
+                await session.wait_closed()
 
         async with asyncio.TaskGroup() as tg:
             tg.create_task(server_side())
@@ -276,6 +279,7 @@ async def test_sequential_sessions_same_server(
                     async with send:
                         data = await recv.read()
                         await send.write(data)
+                    await session.wait_closed()
                     session_count += 1
 
         async with asyncio.TaskGroup() as tg:
@@ -288,7 +292,8 @@ async def test_sequential_sessions_same_server(
                     f"""
                     const stream = await transport.createBidirectionalStream();
                     await writeAllString(stream.writable, "session-{i}");
-                    return await readAllString(stream.readable);
+                    const echo = await readAllString(stream.readable);
+                    return echo;
                 """,
                 )
                 results.append(r)
@@ -324,6 +329,7 @@ async def test_interleaved_stream_and_datagram(
                 async with send2:
                     data2 = await recv2.read()
                     await send2.write(data2)
+                await session.wait_closed()
 
         async with asyncio.TaskGroup() as tg:
             tg.create_task(server_side())

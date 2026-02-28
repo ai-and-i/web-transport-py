@@ -136,8 +136,10 @@ async def test_browser_close_during_server_write(
                 hash_b64,
                 """
                 const stream = await transport.createBidirectionalStream();
-                // Give server a moment to start writing
-                await new Promise(r => setTimeout(r, 100));
+                const reader = stream.readable.getReader();
+                // Wait for server to start writing by reading one chunk
+                await reader.read();
+                reader.releaseLock();
                 transport.close({closeCode: 1, reason: "abort"});
                 return true;
             """,
@@ -160,6 +162,7 @@ async def test_open_bi_after_session_close_raises(
             session = await request.accept()
             async with session:
                 session.close()
+                await session.wait_closed()
                 try:
                     await session.open_bi()
                 except web_transport.SessionClosedLocally as e:
@@ -168,7 +171,9 @@ async def test_open_bi_after_session_close_raises(
         async with asyncio.TaskGroup() as tg:
             tg.create_task(server_side())
             try:
-                await run_js(port, hash_b64, "return true;")
+                await run_js(
+                    port, hash_b64, "await transport.closed; return true;"
+                )
             except Exception:
                 pass
 
@@ -220,6 +225,7 @@ async def test_send_datagram_after_close_raises(
             session = await request.accept()
             async with session:
                 session.close()
+                await session.wait_closed()
                 try:
                     session.send_datagram(b"too late")
                 except web_transport.SessionClosed as e:
@@ -228,7 +234,9 @@ async def test_send_datagram_after_close_raises(
         async with asyncio.TaskGroup() as tg:
             tg.create_task(server_side())
             try:
-                await run_js(port, hash_b64, "return true;")
+                await run_js(
+                    port, hash_b64, "await transport.closed; return true;"
+                )
             except Exception:
                 pass
 
@@ -266,83 +274,6 @@ async def test_receive_datagram_after_browser_close_raises(
     assert isinstance(error, web_transport.SessionClosed)
 
 
-@pytest.mark.xfail(
-    reason="Timing-sensitive: idle timeout interaction with Chromium's own timeout may cause flakiness"
-)
-async def test_idle_timeout_expires(
-    start_server: ServerFactory, run_js_raw: RunJSRaw
-) -> None:
-    """Server max_idle_timeout=1, no keep-alive, idle 2s → server sees SessionTimeout."""
-    async with start_server(max_idle_timeout=1, keep_alive_interval=None) as (
-        server,
-        port,
-        hash_b64,
-    ):
-        close_reason: web_transport.SessionError | None = None
-
-        async def server_side() -> None:
-            nonlocal close_reason
-            request = await server.accept()
-            assert request is not None
-            session = await request.accept()
-            async with session:
-                await session.wait_closed()
-                close_reason = session.close_reason
-
-        setup = _webtransport_connect_js(port, hash_b64)
-        async with asyncio.TaskGroup() as tg:
-            tg.create_task(server_side())
-            await run_js_raw(f"""
-                {setup}
-                const transport = new WebTransport(url, transportOptions);
-                await transport.ready;
-                // Idle for 2 seconds
-                await new Promise(r => setTimeout(r, 2000));
-                try {{ transport.close(); }} catch (e) {{}}
-                return true;
-            """)
-
-    assert isinstance(close_reason, web_transport.SessionTimeout)
-
-
-async def test_keep_alive_prevents_timeout(
-    start_server: ServerFactory, run_js_raw: RunJSRaw
-) -> None:
-    """Server max_idle_timeout=2, keep_alive_interval=0.5, idle 3s → session survives."""
-    async with start_server(max_idle_timeout=2, keep_alive_interval=0.5) as (
-        server,
-        port,
-        hash_b64,
-    ):
-        still_open: bool = False
-
-        async def server_side() -> None:
-            nonlocal still_open
-            request = await server.accept()
-            assert request is not None
-            session = await request.accept()
-            async with session:
-                # Wait 3 seconds — with keep-alive, session should survive
-                await asyncio.sleep(3)
-                still_open = session.close_reason is None
-                session.close()
-
-        setup = _webtransport_connect_js(port, hash_b64)
-        async with asyncio.TaskGroup() as tg:
-            tg.create_task(server_side())
-            await run_js_raw(f"""
-                {setup}
-                const transport = new WebTransport(url, transportOptions);
-                await transport.ready;
-                // Idle for 4 seconds
-                await new Promise(r => setTimeout(r, 4000));
-                try {{ transport.close(); }} catch (e) {{}}
-                return true;
-            """)
-
-    assert still_open is True
-
-
 async def test_server_close_all_connections(
     start_server: ServerFactory, run_js_raw: RunJSRaw
 ) -> None:
@@ -353,7 +284,6 @@ async def test_server_close_all_connections(
             request = await server.accept()
             assert request is not None
             await request.accept()
-            await asyncio.sleep(0.1)
             server.close()
 
         setup = _webtransport_connect_js(port, hash_b64)

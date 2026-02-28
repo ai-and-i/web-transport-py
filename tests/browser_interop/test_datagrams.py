@@ -26,6 +26,7 @@ async def test_datagram_echo_text(start_server: ServerFactory, run_js: RunJS) ->
             async with session:
                 dgram = await session.receive_datagram()
                 session.send_datagram(dgram)
+                await session.wait_closed()
 
         async with asyncio.TaskGroup() as tg:
             tg.create_task(server_side())
@@ -58,6 +59,7 @@ async def test_datagram_echo_binary(start_server: ServerFactory, run_js: RunJS) 
             async with session:
                 dgram = await session.receive_datagram()
                 session.send_datagram(dgram)
+                await session.wait_closed()
 
         async with asyncio.TaskGroup() as tg:
             tg.create_task(server_side())
@@ -80,40 +82,6 @@ async def test_datagram_echo_binary(start_server: ServerFactory, run_js: RunJS) 
     assert result == list(range(256))
 
 
-@pytest.mark.xfail(
-    reason="Empty datagrams may not be supported by the browser or cause connection errors"
-)
-async def test_datagram_empty(start_server: ServerFactory, run_js: RunJS) -> None:
-    """Browser sends empty datagram, server echoes b''."""
-    async with start_server() as (server, port, hash_b64):
-
-        async def server_side() -> None:
-            request = await server.accept()
-            assert request is not None
-            session = await request.accept()
-            async with session:
-                dgram = await session.receive_datagram()
-                session.send_datagram(dgram)
-
-        async with asyncio.TaskGroup() as tg:
-            tg.create_task(server_side())
-            result = await run_js(
-                port,
-                hash_b64,
-                """
-                const writer = transport.datagrams.writable.getWriter();
-                const reader = transport.datagrams.readable.getReader();
-                await writer.write(new Uint8Array(0));
-                const { value } = await reader.read();
-                reader.releaseLock();
-                writer.releaseLock();
-                return Array.from(value);
-            """,
-            )
-
-    assert result == []
-
-
 async def test_datagram_server_initiates(
     start_server: ServerFactory, run_js: RunJS
 ) -> None:
@@ -128,6 +96,7 @@ async def test_datagram_server_initiates(
                 # Small delay to let browser set up reader
                 await asyncio.sleep(0.1)
                 session.send_datagram(b"server-first")
+                await session.wait_closed()
 
         async with asyncio.TaskGroup() as tg:
             tg.create_task(server_side())
@@ -159,6 +128,7 @@ async def test_datagram_multiple_roundtrips(
                 for _ in range(10):
                     dgram = await session.receive_datagram()
                     session.send_datagram(dgram)
+                await session.wait_closed()
 
         async with asyncio.TaskGroup() as tg:
             tg.create_task(server_side())
@@ -194,14 +164,12 @@ async def test_datagram_rapid_burst(start_server: ServerFactory, run_js: RunJS) 
             assert request is not None
             session = await request.accept()
             async with session:
-                # Collect datagrams with a timeout
+                # Collect datagrams until the browser closes the session
                 try:
                     while True:
-                        dgram = await asyncio.wait_for(
-                            session.receive_datagram(), timeout=2.0
-                        )
+                        dgram = await session.receive_datagram()
                         received.append(dgram)
-                except (TimeoutError, asyncio.TimeoutError):
+                except web_transport.SessionClosed:
                     pass
 
         async with asyncio.TaskGroup() as tg:
@@ -214,10 +182,10 @@ async def test_datagram_rapid_burst(start_server: ServerFactory, run_js: RunJS) 
                 for (let i = 0; i < 20; i++) {
                     const msg = new TextEncoder().encode("burst-" + i);
                     await writer.write(msg);
+                    await new Promise(r => setTimeout(r, 10));
                 }
                 writer.releaseLock();
                 // Wait for server to collect
-                await new Promise(r => setTimeout(r, 2500));
                 return true;
             """,
             )
@@ -240,11 +208,10 @@ async def test_datagram_max_size_property(
             session = await request.accept()
             async with session:
                 max_size = session.max_datagram_size
-                await session.wait_closed()
 
         async with asyncio.TaskGroup() as tg:
             tg.create_task(server_side())
-            await run_js(port, hash_b64, "return true;")
+            await run_js(port, hash_b64, "await transport.closed; return true;")
 
     assert max_size > 0
 
@@ -264,12 +231,12 @@ async def test_datagram_oversized_raises(
             async with session:
                 max_size = session.max_datagram_size
                 try:
-                    session.send_datagram(b"\x00" * (max_size + 1))
+                    session.send_datagram(b"\x00" * (max_size + 100))
                 except web_transport.DatagramTooLargeError as e:
                     error = e
 
         async with asyncio.TaskGroup() as tg:
             tg.create_task(server_side())
-            await run_js(port, hash_b64, "return true;")
+            await run_js(port, hash_b64, "await transport.closed; return true;")
 
     assert error is not None

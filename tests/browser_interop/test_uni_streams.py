@@ -28,6 +28,7 @@ async def test_uni_browser_to_server(
             async with session:
                 recv = await session.accept_uni()
                 received = await recv.read()
+                await session.wait_closed()
 
         async with asyncio.TaskGroup() as tg:
             tg.create_task(server_side())
@@ -93,6 +94,7 @@ async def test_uni_browser_to_server_large_payload(
                 recv = await session.accept_uni()
                 data = await recv.read()
                 received_len = len(data)
+                await session.wait_closed()
 
         async with asyncio.TaskGroup() as tg:
             tg.create_task(server_side())
@@ -127,6 +129,7 @@ async def test_uni_multiple_browser_to_server(
                     recv = await session.accept_uni()
                     data = await recv.read()
                     received.append(data)
+                await asyncio.sleep(0.5)  # Let browser finish writes
 
         async with asyncio.TaskGroup() as tg:
             tg.create_task(server_side())
@@ -138,8 +141,7 @@ async def test_uni_multiple_browser_to_server(
                     const stream = await transport.createUnidirectionalStream();
                     await writeAllString(stream, "uni-" + i);
                 }
-                // Give server time to accept all streams before transport closes
-                await new Promise(r => setTimeout(r, 500));
+                await transport.closed;
                 return true;
             """,
             )
@@ -201,6 +203,7 @@ async def test_uni_browser_to_server_binary(
             async with session:
                 recv = await session.accept_uni()
                 received = await recv.read()
+                await session.wait_closed()
 
         async with asyncio.TaskGroup() as tg:
             tg.create_task(server_side())
