@@ -171,9 +171,7 @@ async def test_open_bi_after_session_close_raises(
         async with asyncio.TaskGroup() as tg:
             tg.create_task(server_side())
             try:
-                await run_js(
-                    port, hash_b64, "await transport.closed; return true;"
-                )
+                await run_js(port, hash_b64, "await transport.closed; return true;")
             except Exception:
                 pass
 
@@ -234,9 +232,7 @@ async def test_send_datagram_after_close_raises(
         async with asyncio.TaskGroup() as tg:
             tg.create_task(server_side())
             try:
-                await run_js(
-                    port, hash_b64, "await transport.closed; return true;"
-                )
+                await run_js(port, hash_b64, "await transport.closed; return true;")
             except Exception:
                 pass
 
