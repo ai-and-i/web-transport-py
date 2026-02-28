@@ -75,7 +75,7 @@ async def test_write_after_finish_raises(session_pair):
     _server_session, client_session = session_pair
 
     send, _recv = await client_session.open_bi()
-    send.finish()
+    await send.finish()
     with pytest.raises(web_transport.StreamClosedLocally):
         await send.write(b"x")
 
@@ -313,7 +313,7 @@ async def test_half_closed_write_after_recv_eof(session_pair):
     async def server_side():
         send_s, recv_s = await server_session.accept_bi()
         # Finish our send side
-        send_s.finish()
+        await send_s.finish()
         # Read what the client sends after our EOF
         data = await recv_s.read()
         return data

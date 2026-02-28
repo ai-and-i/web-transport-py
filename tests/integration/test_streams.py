@@ -23,7 +23,7 @@ async def test_write_some(session_pair):
     n = await send.write_some(b"hello")
     assert isinstance(n, int)
     assert n > 0
-    send.finish()
+    await send.finish()
 
     response = await recv.read()
     assert response == b"hello"
@@ -113,7 +113,7 @@ async def test_priority(session_pair):
 
     send.priority = 42
     assert send.priority == 42
-    send.finish()
+    await send.finish()
 
 
 @pytest.mark.asyncio
@@ -168,7 +168,7 @@ async def test_read_zero_returns_empty(session_pair):
     send, recv = await client_session.open_bi()
     data = await recv.read(0)
     assert data == b""
-    send.finish()
+    await send.finish()
 
 
 @pytest.mark.asyncio
@@ -269,7 +269,7 @@ async def test_readexactly_zero(session_pair):
     send, recv = await client_session.open_bi()
     data = await recv.readexactly(0)
     assert data == b""
-    send.finish()
+    await send.finish()
 
 
 @pytest.mark.asyncio
@@ -279,7 +279,7 @@ async def test_readexactly_after_eof(session_pair):
 
     async def server_side():
         send, _recv = await server_session.accept_bi()
-        send.finish()  # Immediately EOF
+        await send.finish()  # Immediately EOF
 
     _send, recv = await client_session.open_bi()
     task = asyncio.create_task(server_side())
@@ -313,7 +313,7 @@ async def test_write_explicit(session_pair):
 
     send, recv = await client_session.open_bi()
     await send.write(payload)
-    send.finish()
+    await send.finish()
 
     response = await recv.read()
     assert response == payload
@@ -333,7 +333,7 @@ async def test_finish_explicit(session_pair):
     send, _recv = await client_session.open_bi()
     task = asyncio.create_task(server_side())
 
-    send.finish()  # Send EOF immediately
+    await send.finish()  # Send EOF immediately
     await asyncio.wait_for(task, timeout=5.0)
 
 
@@ -370,4 +370,4 @@ async def test_empty_write(session_pair):
 
     send, _recv = await client_session.open_bi()
     await send.write(b"")
-    send.finish()
+    await send.finish()
