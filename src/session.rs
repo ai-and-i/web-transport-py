@@ -123,9 +123,13 @@ impl Session {
     /// The reason the session was closed, or None if still open.
     #[getter]
     fn close_reason(&self, py: Python<'_>) -> Option<Py<PyAny>> {
-        self.inner
-            .close_reason()
-            .map(|err| errors::map_session_error(err).value(py).as_any().clone().unbind())
+        self.inner.close_reason().map(|err| {
+            errors::map_session_error(err)
+                .value(py)
+                .as_any()
+                .clone()
+                .unbind()
+        })
     }
 
     /// Maximum payload size for send_datagram.
