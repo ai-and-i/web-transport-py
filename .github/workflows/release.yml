@@ -26,7 +26,7 @@ jobs:
           args: --release --out dist -i python3.12 -i python3.13
           manylinux: auto
           before-script-linux: |
-            if [ "$CARGO_BUILD_TARGET" = "aarch64-unknown-linux-gnu" ]; then
+            if [ "${CARGO_BUILD_TARGET:-}" = "aarch64-unknown-linux-gnu" ]; then
               export CFLAGS_aarch64_unknown_linux_gnu="-march=armv8-a"
             fi
 
