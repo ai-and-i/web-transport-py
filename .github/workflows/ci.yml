@@ -13,9 +13,8 @@ jobs:
         with:
           submodules: recursive
 
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: rustfmt, clippy
+      - name: Install Rust toolchain
+        run: rustup show && rustup component add rustfmt clippy
 
       - name: Install uv
         uses: astral-sh/setup-uv@v4
@@ -62,7 +61,8 @@ jobs:
         with:
           submodules: recursive
 
-      - uses: dtolnay/rust-toolchain@stable
+      - name: Install Rust toolchain
+        run: rustup show
 
       - name: Install uv
         uses: astral-sh/setup-uv@v4
