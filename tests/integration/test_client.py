@@ -496,9 +496,8 @@ async def test_idle_timeout_disabled(self_signed_cert, cert_hash):
             request = await server.accept()
             assert request is not None
             session = await request.accept()
-            await asyncio.sleep(2.0)
-            assert session.close_reason is None
-            session.close()
+            await session.wait_closed()
+            assert isinstance(session.close_reason, web_transport.SessionClosedByPeer)
 
         async def client_task():
             async with web_transport.Client(
@@ -506,9 +505,10 @@ async def test_idle_timeout_disabled(self_signed_cert, cert_hash):
                 max_idle_timeout=None,
             ) as client:
                 session = await client.connect(f"https://[::1]:{port}")
-                await asyncio.sleep(2.0)
+                await asyncio.sleep(1.5)
                 assert session.close_reason is None
                 session.close()
+                await session.wait_closed()
 
         await asyncio.gather(
             asyncio.create_task(server_task()),
