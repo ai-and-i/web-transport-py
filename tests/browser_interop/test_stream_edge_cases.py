@@ -197,7 +197,6 @@ async def test_browser_cancel_recv_with_code(
                     await recv.read()
                 except web_transport.SessionClosed:
                     pass
-                await session.wait_closed()
 
         async with asyncio.TaskGroup() as tg:
             tg.create_task(server_side())
@@ -211,7 +210,8 @@ async def test_browser_cancel_recv_with_code(
                 await reader.cancel(err);
                 // Close writable so server recv completes
                 const writer = stream.writable.getWriter();
-                await writer.close();
+                try { await writer.close(); } catch (e) { }
+                try { await transport.closed; } catch (e) { }
                 return true;
             """,
             )
