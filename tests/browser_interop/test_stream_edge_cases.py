@@ -33,7 +33,6 @@ async def test_browser_writer_close_signals_eof(
                 async with send:
                     received = await recv.read()
                     eof_bytes = await recv.read()
-                await session.wait_closed()
 
         async with asyncio.TaskGroup() as tg:
             tg.create_task(server_side())
@@ -42,7 +41,8 @@ async def test_browser_writer_close_signals_eof(
                 hash_b64,
                 """
                 const stream = await transport.createBidirectionalStream();
-                await writeAllString(stream.writable, "data");
+                try { await writeAllString(stream.writable, "data"); } catch (e) { }
+                try { await transport.closed; } catch (e) { }
                 return true;
             """,
             )
@@ -117,7 +117,6 @@ async def test_browser_abort_with_code(
                 const writer = stream.writable.getWriter();
                 const reader = stream.readable.getReader();
                 await reader.read(); // wait for server to write
-                await new Promise(r => setTimeout(r, 50));
                 let err = new WebTransportError({ message: "abort", streamErrorCode: 42 });
                 await writer.abort(err);
                 await transport.closed;
@@ -279,7 +278,6 @@ async def test_recv_read_partial(start_server: ServerFactory, run_js: RunJS) -> 
                 send, recv = await session.accept_bi()
                 async with send:
                     chunk = await recv.read(10)
-                await session.wait_closed()
 
         async with asyncio.TaskGroup() as tg:
             tg.create_task(server_side())
@@ -290,7 +288,8 @@ async def test_recv_read_partial(start_server: ServerFactory, run_js: RunJS) -> 
                 const stream = await transport.createBidirectionalStream();
                 const payload = new Uint8Array(100);
                 for (let i = 0; i < 100; i++) payload[i] = i;
-                await writeAll(stream.writable, payload);
+                try { await writeAll(stream.writable, payload); } catch (e) { }
+                try { await transport.closed; } catch (e) { }
                 return true;
             """,
             )
@@ -314,7 +313,6 @@ async def test_recv_readexactly_success(
                 send, recv = await session.accept_bi()
                 async with send:
                     data = await recv.readexactly(10)
-                await session.wait_closed()
 
         async with asyncio.TaskGroup() as tg:
             tg.create_task(server_side())
@@ -324,7 +322,8 @@ async def test_recv_readexactly_success(
                 """
                 const stream = await transport.createBidirectionalStream();
                 const payload = new Uint8Array([0,1,2,3,4,5,6,7,8,9]);
-                await writeAll(stream.writable, payload);
+                try { await writeAll(stream.writable, payload); } catch (e) { }
+                try { await transport.closed; } catch (e) { }
                 return true;
             """,
             )
@@ -351,7 +350,6 @@ async def test_recv_readexactly_incomplete(
                         await recv.readexactly(10)
                     except web_transport.StreamIncompleteReadError as e:
                         error = e
-                await session.wait_closed()
 
         async with asyncio.TaskGroup() as tg:
             tg.create_task(server_side())
@@ -361,7 +359,8 @@ async def test_recv_readexactly_incomplete(
                 """
                 const stream = await transport.createBidirectionalStream();
                 const payload = new Uint8Array([0,1,2,3,4]);
-                await writeAll(stream.writable, payload);
+                try { await writeAll(stream.writable, payload); } catch (e) { }
+                try { await transport.closed; } catch (e) { }
                 return true;
             """,
             )
@@ -390,6 +389,7 @@ async def test_recv_read_with_limit_exceeded(
                         await recv.read(limit=100)
                     except web_transport.StreamTooLongError as e:
                         error = e
+                session.close(0, "")
                 await session.wait_closed()
 
         async with asyncio.TaskGroup() as tg:
@@ -400,7 +400,10 @@ async def test_recv_read_with_limit_exceeded(
                 """
                 const stream = await transport.createBidirectionalStream();
                 const payload = new Uint8Array(200);
-                await writeAll(stream.writable, payload);
+                try { await writeAll(stream.writable, payload); } catch (e) { }
+                try {
+                    await transport.closed; // wait for server to close after error
+                } catch (e) { }
                 return true;
             """,
             )
@@ -425,7 +428,6 @@ async def test_recv_read_with_limit_not_exceeded(
                 send, recv = await session.accept_bi()
                 async with send:
                     data = await recv.read(limit=100)
-                await session.wait_closed()
 
         async with asyncio.TaskGroup() as tg:
             tg.create_task(server_side())
@@ -435,7 +437,8 @@ async def test_recv_read_with_limit_not_exceeded(
                 """
                 const stream = await transport.createBidirectionalStream();
                 const payload = new Uint8Array(50);
-                await writeAll(stream.writable, payload);
+                try { await writeAll(stream.writable, payload); } catch (e) { }
+                try { await transport.closed; } catch (e) { }
                 return true;
             """,
             )
@@ -457,7 +460,6 @@ async def test_recv_async_iteration(start_server: ServerFactory, run_js: RunJS) 
                 async with send:
                     async for chunk in recv:
                         chunks.append(chunk)
-                await session.wait_closed()
 
         async with asyncio.TaskGroup() as tg:
             tg.create_task(server_side())
@@ -470,7 +472,8 @@ async def test_recv_async_iteration(start_server: ServerFactory, run_js: RunJS) 
                 await writer.write(new TextEncoder().encode("a"));
                 await writer.write(new TextEncoder().encode("b"));
                 await writer.write(new TextEncoder().encode("c"));
-                await writer.close();
+                try { await writer.close(); } catch (e) { }
+                try { await transport.closed; } catch (e) { }
                 return true;
             """,
             )
@@ -673,7 +676,6 @@ async def test_read_after_eof_returns_empty(
                     # And again
                     data3 = await recv.read()
                     reads.append(data3)
-                await session.wait_closed()
 
         async with asyncio.TaskGroup() as tg:
             tg.create_task(server_side())
@@ -682,7 +684,8 @@ async def test_read_after_eof_returns_empty(
                 hash_b64,
                 """
                 const stream = await transport.createBidirectionalStream();
-                await writeAllString(stream.writable, "x");
+                try { await writeAllString(stream.writable, "x"); } catch (e) { }
+                try { await transport.closed; } catch (e) { }
                 return true;
             """,
             )
@@ -742,7 +745,6 @@ async def test_read_all_to_eof_default(
                 send, recv = await session.accept_bi()
                 async with send:
                     received = await recv.read()
-                await session.wait_closed()
 
         async with asyncio.TaskGroup() as tg:
             tg.create_task(server_side())
@@ -751,7 +753,8 @@ async def test_read_all_to_eof_default(
                 hash_b64,
                 """
                 const stream = await transport.createBidirectionalStream();
-                await writeAllString(stream.writable, "all-data-here");
+                try { await writeAllString(stream.writable, "all-data-here"); } catch (e) { }
+                try { await transport.closed; } catch (e) { }
                 return true;
             """,
             )
@@ -782,7 +785,6 @@ async def test_read_n_returns_less_at_eof(
                     rest = await recv.read(1000)
                     if rest:
                         all_received += rest
-                await session.wait_closed()
 
         async with asyncio.TaskGroup() as tg:
             tg.create_task(server_side())
@@ -792,7 +794,8 @@ async def test_read_n_returns_less_at_eof(
                 """
                 const stream = await transport.createBidirectionalStream();
                 const payload = new Uint8Array([1, 2, 3, 4, 5]);
-                await writeAll(stream.writable, payload);
+                try { await writeAll(stream.writable, payload); } catch (e) { }
+                try { await transport.closed; } catch (e) { }
                 return true;
             """,
             )
@@ -823,7 +826,6 @@ async def test_readexactly_after_eof(
                         await recv.readexactly(5)
                     except web_transport.StreamIncompleteReadError as e:
                         error = e
-                await session.wait_closed()
 
         async with asyncio.TaskGroup() as tg:
             tg.create_task(server_side())
@@ -832,7 +834,8 @@ async def test_readexactly_after_eof(
                 hash_b64,
                 """
                 const stream = await transport.createBidirectionalStream();
-                await writeAllString(stream.writable, "data");
+                try { await writeAllString(stream.writable, "data"); } catch (e) { }
+                try { await transport.closed; } catch (e) { }
                 return true;
             """,
             )
@@ -861,7 +864,6 @@ async def test_readexactly_zero_after_eof(
                     await recv.read()
                     # readexactly(0) should succeed even after EOF
                     result_bytes = await recv.readexactly(0)
-                await session.wait_closed()
 
         async with asyncio.TaskGroup() as tg:
             tg.create_task(server_side())
@@ -871,7 +873,8 @@ async def test_readexactly_zero_after_eof(
                 """
                 const stream = await transport.createBidirectionalStream();
                 const writer = stream.writable.getWriter();
-                await writer.close();
+                try { await writer.close(); } catch (e) { }
+                try { await transport.closed; } catch (e) { }
                 return true;
             """,
             )
@@ -948,7 +951,6 @@ async def test_recv_context_manager_no_stop_at_eof(
                     async with recv:
                         received = await recv.read()
                     # If no STOP_SENDING was sent, this is a clean exit
-                await session.wait_closed()
 
         async with asyncio.TaskGroup() as tg:
             tg.create_task(server_side())
@@ -957,7 +959,8 @@ async def test_recv_context_manager_no_stop_at_eof(
                 hash_b64,
                 """
                 const stream = await transport.createBidirectionalStream();
-                await writeAllString(stream.writable, "complete-data");
+                try { await writeAllString(stream.writable, "complete-data"); } catch (e) { }
+                try { await transport.closed; } catch (e) { }
                 return true;
             """,
             )
@@ -983,7 +986,6 @@ async def test_stream_reset_code_zero(
             async with session:
                 send, recv = await session.accept_bi()
                 await send.write(b"\x01")
-                await asyncio.sleep(0.1)
                 send.reset(0)
                 try:
                     await recv.read()
@@ -999,11 +1001,12 @@ async def test_stream_reset_code_zero(
                 """
                 const stream = await transport.createBidirectionalStream();
                 const reader = stream.readable.getReader();
-                await reader.read();  // read the initial byte
                 try {
-                    await reader.read();
+                    await reader.read();  // read the initial byte
+                    await reader.read();  // should get RESET
                     return { errored: false };
                 } catch (e) {
+                    reader.releaseLock();
                     const writer = stream.writable.getWriter();
                     try { await writer.close(); } catch (_) {}
                     return {
@@ -1032,7 +1035,6 @@ async def test_stream_reset_code_255(
             async with session:
                 send, recv = await session.accept_bi()
                 await send.write(b"\x01")
-                await asyncio.sleep(0.1)
                 send.reset(255)
                 try:
                     await recv.read()
@@ -1048,11 +1050,12 @@ async def test_stream_reset_code_255(
                 """
                 const stream = await transport.createBidirectionalStream();
                 const reader = stream.readable.getReader();
-                await reader.read();  // read the initial byte
                 try {
-                    await reader.read();
+                    await reader.read();  // read the initial byte
+                    await reader.read();  // should get RESET
                     return { errored: false };
                 } catch (e) {
+                    reader.releaseLock();
                     const writer = stream.writable.getWriter();
                     try { await writer.close(); } catch (_) {}
                     return {

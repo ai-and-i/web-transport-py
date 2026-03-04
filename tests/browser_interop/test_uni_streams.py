@@ -28,7 +28,6 @@ async def test_uni_browser_to_server(
             async with session:
                 recv = await session.accept_uni()
                 received = await recv.read()
-                await session.wait_closed()
 
         async with asyncio.TaskGroup() as tg:
             tg.create_task(server_side())
@@ -37,7 +36,8 @@ async def test_uni_browser_to_server(
                 hash_b64,
                 """
                 const stream = await transport.createUnidirectionalStream();
-                await writeAllString(stream, "uni hello");
+                try { await writeAllString(stream, "uni hello"); } catch (e) { }
+                try { await transport.closed; } catch (e) { }
                 return true;
             """,
             )
@@ -94,7 +94,6 @@ async def test_uni_browser_to_server_large_payload(
                 recv = await session.accept_uni()
                 data = await recv.read()
                 received_len = len(data)
-                await session.wait_closed()
 
         async with asyncio.TaskGroup() as tg:
             tg.create_task(server_side())
@@ -105,7 +104,8 @@ async def test_uni_browser_to_server_large_payload(
                 const stream = await transport.createUnidirectionalStream();
                 const payload = new Uint8Array({size});
                 for (let i = 0; i < payload.length; i++) payload[i] = i & 0xff;
-                await writeAll(stream, payload);
+                try {{ await writeAll(stream, payload); }} catch (e) {{ }}
+                try {{ await transport.closed; }} catch (e) {{ }}
                 return true;
             """,
             )
@@ -130,7 +130,6 @@ async def test_uni_multiple_browser_to_server(
                     data = await recv.read()
                     received.append(data)
                     await recv.wait_closed()
-                await asyncio.sleep(0.1)  # Let browser finish writes
 
         async with asyncio.TaskGroup() as tg:
             tg.create_task(server_side())
@@ -140,9 +139,9 @@ async def test_uni_multiple_browser_to_server(
                 """
                 for (let i = 0; i < 5; i++) {
                     const stream = await transport.createUnidirectionalStream();
-                    await writeAllString(stream, "uni-" + i);
+                    try { await writeAllString(stream, "uni-" + i); } catch (e) { }
                 }
-                await transport.closed;
+                try { await transport.closed; } catch (e) { }
                 return true;
             """,
             )
@@ -204,7 +203,6 @@ async def test_uni_browser_to_server_binary(
             async with session:
                 recv = await session.accept_uni()
                 received = await recv.read()
-                await session.wait_closed()
 
         async with asyncio.TaskGroup() as tg:
             tg.create_task(server_side())
@@ -215,7 +213,8 @@ async def test_uni_browser_to_server_binary(
                 const stream = await transport.createUnidirectionalStream();
                 const payload = new Uint8Array(256);
                 for (let i = 0; i < 256; i++) payload[i] = i;
-                await writeAll(stream, payload);
+                try { await writeAll(stream, payload); } catch (e) { }
+                try { await transport.closed; } catch (e) { }
                 return true;
             """,
             )

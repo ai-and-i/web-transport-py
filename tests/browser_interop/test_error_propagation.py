@@ -29,8 +29,8 @@ async def test_server_close_during_browser_read(
             async with session:
                 send, recv = await session.open_bi()
                 await send.write(b"partial")
-                # Small delay so browser accepts the stream before we close
-                await asyncio.sleep(0.1)
+                # Wait for browser to signal it accepted the stream
+                await recv.read(1)
                 # Close session abruptly — don't finish the stream
                 session.close(1, "abort")
 
@@ -44,6 +44,10 @@ async def test_server_close_during_browser_read(
                     const reader = transport.incomingBidirectionalStreams.getReader();
                     const { value: stream } = await reader.read();
                     reader.releaseLock();
+                    // Signal to server that we accepted the stream
+                    const writer = stream.writable.getWriter();
+                    await writer.write(new Uint8Array([1]));
+                    writer.releaseLock();
                     const streamReader = stream.readable.getReader();
                     while (true) {
                         const { value, done } = await streamReader.read();
@@ -359,7 +363,6 @@ async def test_double_stop_raises(start_server: ServerFactory, run_js: RunJS) ->
                         recv.stop()
                     except web_transport.StreamClosedLocally as e:
                         error = e
-                await session.wait_closed()
 
         async with asyncio.TaskGroup() as tg:
             tg.create_task(server_side())
@@ -374,6 +377,7 @@ async def test_double_stop_raises(start_server: ServerFactory, run_js: RunJS) ->
                 } catch (e) {
                     // should raise because of stop()
                 }
+                try { await transport.closed; } catch (e) { }
                 return true;
             """,
             )
@@ -478,7 +482,6 @@ async def test_read_after_stop_raises(
                         await recv.read()
                     except web_transport.StreamClosedLocally as e:
                         error = e
-                await session.wait_closed()
 
         async with asyncio.TaskGroup() as tg:
             tg.create_task(server_side())
@@ -490,10 +493,11 @@ async def test_read_after_stop_raises(
                 try {
                     const writer = stream.writable.getWriter();
                     await writer.close();
-                    return true;
                 } catch (e) {
                     // should raise because of stop()
                 }
+                try { await transport.closed; } catch (e) { }
+                return true;
             """,
             )
 
@@ -577,7 +581,6 @@ async def test_browser_close_during_server_pending_read(
                 const reader = stream.readable.getReader();
                 await reader.read();
                 // Don't write — just close the transport abruptly
-                await new Promise(r => setTimeout(r, 50));
                 transport.close({{closeCode: 1, reason: "abort"}});
                 await transport.closed;
                 return true;
@@ -642,7 +645,8 @@ async def test_uni_send_reset(start_server: ServerFactory, run_js: RunJS) -> Non
             async with session:
                 send = await session.open_uni()
                 await send.write(b"partial")
-                await asyncio.sleep(0.1)
+                # Wait for browser to signal it accepted the stream
+                await session.receive_datagram()
                 send.reset(7)
                 await session.wait_closed()
 
@@ -655,6 +659,10 @@ async def test_uni_send_reset(start_server: ServerFactory, run_js: RunJS) -> Non
                 const reader = transport.incomingUnidirectionalStreams.getReader();
                 const { value: stream } = await reader.read();
                 reader.releaseLock();
+                // Signal to server that we accepted the stream
+                const dgWriter = transport.datagrams.writable.getWriter();
+                await dgWriter.write(new Uint8Array([1]));
+                dgWriter.releaseLock();
                 const streamReader = stream.getReader();
                 try {
                     while (true) {
@@ -683,6 +691,8 @@ async def test_uni_recv_stop(start_server: ServerFactory, run_js: RunJS) -> None
             async with session:
                 recv = await session.accept_uni()
                 recv.stop(7)
+                # Signal to browser that STOP_SENDING was sent
+                session.send_datagram(b"\x01")
                 await session.wait_closed()
 
         async with asyncio.TaskGroup() as tg:
@@ -693,8 +703,10 @@ async def test_uni_recv_stop(start_server: ServerFactory, run_js: RunJS) -> None
                 """
                 const stream = await transport.createUnidirectionalStream();
                 const writer = stream.getWriter();
-                // Give server time to send STOP_SENDING
-                await new Promise(r => setTimeout(r, 200));
+                // Wait for server to signal STOP_SENDING was sent
+                const dgReader = transport.datagrams.readable.getReader();
+                await dgReader.read();
+                dgReader.releaseLock();
                 try {
                     // Write enough to trigger the error
                     for (let i = 0; i < 10; i++) {
@@ -732,7 +744,6 @@ async def test_send_wait_closed_returns_stop_code(
                 send, recv = await session.accept_bi()
                 stop_code = await asyncio.wait_for(send.wait_closed(), timeout=5.0)
                 await recv.read()
-                await session.wait_closed()
 
         async with asyncio.TaskGroup() as tg:
             tg.create_task(server_side())
@@ -746,7 +757,8 @@ async def test_send_wait_closed_returns_stop_code(
                 await reader.cancel(err);
                 // Close writable so server can complete
                 const writer = stream.writable.getWriter();
-                await writer.close();
+                try { await writer.close(); } catch (e) { }
+                try { await transport.closed; } catch (e) { }
                 return true;
             """,
             )
@@ -822,7 +834,6 @@ async def test_recv_wait_closed_returns_reset_code(
                 const writer = stream.writable.getWriter();
                 const reader = stream.readable.getReader();
                 await reader.read();
-                await new Promise(r => setTimeout(r, 10));
                 let err = new WebTransportError({ message: "abort", streamErrorCode: 99 });
                 await writer.abort(err);
                 return true;
@@ -853,7 +864,6 @@ async def test_recv_wait_closed_peer_finishes(
                     result_code = await asyncio.wait_for(
                         recv.wait_closed(), timeout=5.0
                     )
-                await session.wait_closed()
 
         async with asyncio.TaskGroup() as tg:
             tg.create_task(server_side())
@@ -862,7 +872,8 @@ async def test_recv_wait_closed_peer_finishes(
                 hash_b64,
                 """
                 const stream = await transport.createBidirectionalStream();
-                await writeAllString(stream.writable, "hello");
+                try { await writeAllString(stream.writable, "hello"); } catch (e) { }
+                try { await transport.closed; } catch (e) { }
                 return true;
             """,
             )

@@ -93,8 +93,8 @@ async def test_datagram_server_initiates(
             assert request is not None
             session = await request.accept()
             async with session:
-                # Small delay to let browser set up reader
-                await asyncio.sleep(0.1)
+                # Wait for browser to signal readiness
+                await session.receive_datagram()
                 session.send_datagram(b"server-first")
                 await session.wait_closed()
 
@@ -104,7 +104,11 @@ async def test_datagram_server_initiates(
                 port,
                 hash_b64,
                 """
+                const writer = transport.datagrams.writable.getWriter();
                 const reader = transport.datagrams.readable.getReader();
+                // Signal readiness to server
+                await writer.write(new Uint8Array([1]));
+                writer.releaseLock();
                 const { value } = await reader.read();
                 reader.releaseLock();
                 return new TextDecoder().decode(value);
@@ -257,8 +261,8 @@ async def test_datagram_at_exact_max_size(
             async with session:
                 max_size = session.max_datagram_size
                 sent_size = max_size
-                # Let browser set up reader
-                await asyncio.sleep(0.1)
+                # Wait for browser to signal readiness
+                await session.receive_datagram()
                 session.send_datagram(b"\xab" * max_size)
                 await session.wait_closed()
 
@@ -268,7 +272,11 @@ async def test_datagram_at_exact_max_size(
                 port,
                 hash_b64,
                 """
+                const writer = transport.datagrams.writable.getWriter();
                 const reader = transport.datagrams.readable.getReader();
+                // Signal readiness to server
+                await writer.write(new Uint8Array([1]));
+                writer.releaseLock();
                 const { value } = await reader.read();
                 reader.releaseLock();
                 return { length: value.length };
