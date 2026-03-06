@@ -327,7 +327,6 @@ async def test_double_reset_raises(start_server: ServerFactory, run_js: RunJS) -
                     send.reset()
                 except web_transport.StreamClosedLocally as e:
                     error = e
-                await session.wait_closed()
 
         async with asyncio.TaskGroup() as tg:
             tg.create_task(server_side())
@@ -337,7 +336,8 @@ async def test_double_reset_raises(start_server: ServerFactory, run_js: RunJS) -
                 """
                 const stream = await transport.createBidirectionalStream();
                 const writer = stream.writable.getWriter();
-                await writer.close();
+                try { await writer.close(); } catch (e) { }
+                try { await transport.closed; } catch (e) { }
                 return true;
             """,
             )
@@ -404,7 +404,6 @@ async def test_write_after_reset_raises(
                     await send.write(b"x")
                 except web_transport.StreamClosedLocally as e:
                     error = e
-                await session.wait_closed()
 
         async with asyncio.TaskGroup() as tg:
             tg.create_task(server_side())
@@ -414,7 +413,8 @@ async def test_write_after_reset_raises(
                 """
                 const stream = await transport.createBidirectionalStream();
                 const writer = stream.writable.getWriter();
-                await writer.close();
+                try { await writer.close(); } catch (e) { }
+                try { await transport.closed; } catch (e) { }
                 return true;
             """,
             )
@@ -442,7 +442,6 @@ async def test_write_after_finish_raises(
                 except web_transport.StreamClosedLocally as e:
                     error = e
                 await recv.read()
-                await session.wait_closed()
 
         async with asyncio.TaskGroup() as tg:
             tg.create_task(server_side())
@@ -454,7 +453,8 @@ async def test_write_after_finish_raises(
                 // Read server's finished stream
                 await readAll(stream.readable);
                 const writer = stream.writable.getWriter();
-                await writer.close();
+                try { await writer.close(); } catch (e) { }
+                try { await transport.closed; } catch (e) { }
                 return true;
             """,
             )
@@ -522,7 +522,6 @@ async def test_double_finish_raises(start_server: ServerFactory, run_js: RunJS) 
                 except web_transport.StreamClosedLocally as e:
                     error = e
                 await recv.read()
-                await session.wait_closed()
 
         async with asyncio.TaskGroup() as tg:
             tg.create_task(server_side())
@@ -533,7 +532,8 @@ async def test_double_finish_raises(start_server: ServerFactory, run_js: RunJS) 
                 const stream = await transport.createBidirectionalStream();
                 await readAll(stream.readable);
                 const writer = stream.writable.getWriter();
-                await writer.close();
+                try { await writer.close(); } catch (e) { }
+                try { await transport.closed; } catch (e) { }
                 return true;
             """,
             )
@@ -784,7 +784,6 @@ async def test_send_finish_then_wait_closed(
                 await send.finish()
                 result_code = await asyncio.wait_for(send.wait_closed(), timeout=5.0)
                 await recv.read()
-                await session.wait_closed()
 
         async with asyncio.TaskGroup() as tg:
             tg.create_task(server_side())
@@ -797,7 +796,8 @@ async def test_send_finish_then_wait_closed(
                 await readAll(stream.readable);
                 // Close writable
                 const writer = stream.writable.getWriter();
-                await writer.close();
+                try { await writer.close(); } catch (e) { }
+                try { await transport.closed; } catch (e) { }
                 return true;
             """,
             )

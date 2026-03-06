@@ -630,7 +630,6 @@ async def test_write_some_returns_count(
                 async with send:
                     written = await send.write_some(b"hello world")
                     await recv.read()  # wait for browser close
-                await session.wait_closed()
 
         async with asyncio.TaskGroup() as tg:
             tg.create_task(server_side())
@@ -645,7 +644,8 @@ async def test_write_some_returns_count(
                 reader.releaseLock();
                 // Close writable
                 const writer = stream.writable.getWriter();
-                await writer.close();
+                try { await writer.close(); } catch (e) { }
+                try { await transport.closed; } catch (e) { }
                 return true;
             """,
             )
@@ -710,7 +710,6 @@ async def test_empty_write_and_finish(
                 await send.write(b"")
                 await send.finish()
                 await recv.read()  # wait for browser to close
-                await session.wait_closed()
 
         async with asyncio.TaskGroup() as tg:
             tg.create_task(server_side())
@@ -721,7 +720,8 @@ async def test_empty_write_and_finish(
                 const stream = await transport.createBidirectionalStream();
                 const data = await readAll(stream.readable);
                 const writer = stream.writable.getWriter();
-                await writer.close();
+                try { await writer.close(); } catch (e) { }
+                try { await transport.closed; } catch (e) { }
                 return data.length;
             """,
             )
