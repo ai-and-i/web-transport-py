@@ -833,3 +833,212 @@ async def test_recv_wait_closed_session_closed_by_peer(session_pair):
     assert exc_info.value.code == 0
     assert exc_info.value.reason == "done"
     await task
+
+
+# --- asyncio task cancellation tests ---
+
+
+@pytest.mark.asyncio
+async def test_asyncio_cancel_pending_read(session_pair):
+    """task.cancel() on a pending read() raises CancelledError immediately."""
+    server_session, client_session = session_pair
+
+    _send, recv = await client_session.open_bi()
+
+    server_sleep = 5.0
+
+    async def server_side():
+        send_s, _recv_s = await server_session.accept_bi()
+        # Send a small chunk so the read starts, then hold the stream open
+        await send_s.write(b"partial")
+        await asyncio.sleep(server_sleep)
+
+    server_task = asyncio.create_task(server_side())
+
+    # read() with no size reads until EOF — it will receive "partial" but
+    # keep waiting because the server hasn't finished the stream yet.
+    read_fut = asyncio.ensure_future(recv.read())
+    await asyncio.sleep(0.1)
+
+    t0 = asyncio.get_event_loop().time()
+    read_fut.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await read_fut
+    elapsed = asyncio.get_event_loop().time() - t0
+
+    # Must resolve almost instantly, not after server_sleep expires
+    assert elapsed < 1.0, f"cancel took {elapsed:.2f}s, expected < 1s"
+
+    server_task.cancel()
+    try:
+        await server_task
+    except asyncio.CancelledError:
+        pass
+
+
+@pytest.mark.asyncio
+async def test_asyncio_cancel_pending_readexactly(session_pair):
+    """task.cancel() on a pending readexactly() raises CancelledError immediately."""
+    server_session, client_session = session_pair
+
+    _send, recv = await client_session.open_bi()
+
+    server_sleep = 5.0
+
+    async def server_side():
+        send_s, _recv_s = await server_session.accept_bi()
+        # Send fewer bytes than requested so readexactly blocks mid-read
+        await send_s.write(b"short")
+        await asyncio.sleep(server_sleep)
+
+    server_task = asyncio.create_task(server_side())
+
+    # readexactly(100) needs 100 bytes but only 5 arrive — blocks
+    read_fut = asyncio.ensure_future(recv.readexactly(100))
+    await asyncio.sleep(0.1)
+
+    t0 = asyncio.get_event_loop().time()
+    read_fut.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await read_fut
+    elapsed = asyncio.get_event_loop().time() - t0
+
+    assert elapsed < 1.0, f"cancel took {elapsed:.2f}s, expected < 1s"
+
+    server_task.cancel()
+    try:
+        await server_task
+    except asyncio.CancelledError:
+        pass
+
+
+@pytest.mark.asyncio
+async def test_asyncio_cancel_read_then_read_again(session_pair):
+    """After asyncio cancellation of read(), the stream is still usable."""
+    server_session, client_session = session_pair
+
+    _send, recv = await client_session.open_bi()
+
+    server_sleep = 5.0
+    sent_initial = asyncio.Event()
+
+    async def server_side():
+        send_s, _recv_s = await server_session.accept_bi()
+        # Send a partial chunk so the read is in progress, then hold open
+        await send_s.write(b"first-chunk")
+        sent_initial.set()
+        await asyncio.sleep(server_sleep)
+        await send_s.write(b"after-cancel")
+        await send_s.finish()
+
+    server_task = asyncio.create_task(server_side())
+    await sent_initial.wait()
+
+    # First read — cancel it via asyncio while it's mid-stream
+    read_fut = asyncio.ensure_future(recv.read())
+    await asyncio.sleep(0.1)
+
+    t0 = asyncio.get_event_loop().time()
+    read_fut.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await read_fut
+    elapsed = asyncio.get_event_loop().time() - t0
+
+    assert elapsed < 1.0, f"cancel took {elapsed:.2f}s, expected < 1s"
+
+    # Second read — should succeed because no STOP_SENDING was sent.
+    # The cancelled read may have consumed "first-chunk", so we just
+    # verify the stream is still functional and eventually reaches EOF.
+    chunks = []
+    while True:
+        chunk = await asyncio.wait_for(recv.read(), timeout=10.0)
+        if not chunk:
+            break
+        chunks.append(chunk)
+    assert b"after-cancel" in b"".join(chunks)
+
+    await asyncio.wait_for(server_task, timeout=10.0)
+
+
+@pytest.mark.asyncio
+async def test_asyncio_cancel_readexactly_then_read_again(session_pair):
+    """After asyncio cancellation of readexactly(), the stream is still usable."""
+    server_session, client_session = session_pair
+
+    _send, recv = await client_session.open_bi()
+
+    server_sleep = 5.0
+    sent_initial = asyncio.Event()
+
+    async def server_side():
+        send_s, _recv_s = await server_session.accept_bi()
+        # Send fewer bytes than readexactly requests, so it blocks mid-read
+        await send_s.write(b"short")
+        sent_initial.set()
+        await asyncio.sleep(server_sleep)
+        await send_s.write(b"hello")
+        await send_s.finish()
+
+    server_task = asyncio.create_task(server_side())
+    await sent_initial.wait()
+
+    # First readexactly — cancel it via asyncio while it's mid-read
+    read_fut = asyncio.ensure_future(recv.readexactly(100))
+    await asyncio.sleep(0.1)
+
+    t0 = asyncio.get_event_loop().time()
+    read_fut.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await read_fut
+    elapsed = asyncio.get_event_loop().time() - t0
+
+    assert elapsed < 1.0, f"cancel took {elapsed:.2f}s, expected < 1s"
+
+    # Stream should still work — read remaining data
+    chunks = []
+    while True:
+        chunk = await asyncio.wait_for(recv.read(), timeout=10.0)
+        if not chunk:
+            break
+        chunks.append(chunk)
+    assert b"hello" in b"".join(chunks)
+
+    await asyncio.wait_for(server_task, timeout=10.0)
+
+
+@pytest.mark.asyncio
+async def test_asyncio_cancel_pending_write(session_pair):
+    """task.cancel() on a pending write() raises CancelledError immediately."""
+    server_session, client_session = session_pair
+
+    send, _recv = await client_session.open_bi()
+
+    server_sleep = 5.0
+
+    async def server_side():
+        _send_s, _recv_s = await server_session.accept_bi()
+        await asyncio.sleep(server_sleep)
+
+    server_task = asyncio.create_task(server_side())
+
+    # Write in a loop until blocked by flow control, then cancel
+    async def write_loop():
+        while True:
+            await send.write(b"x" * 65536)
+
+    write_task = asyncio.create_task(write_loop())
+    await asyncio.sleep(0.1)
+
+    t0 = asyncio.get_event_loop().time()
+    write_task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await write_task
+    elapsed = asyncio.get_event_loop().time() - t0
+
+    assert elapsed < 1.0, f"cancel took {elapsed:.2f}s, expected < 1s"
+
+    server_task.cancel()
+    try:
+        await server_task
+    except asyncio.CancelledError:
+        pass
